@@ -6,6 +6,7 @@ import Option "mo:base/Option";
 import Time "mo:base/Time";
 import Text "mo:base/Text";
 import Debug "mo:base/Debug";
+import Prelude "mo:base/Prelude";
 
 actor {
   type HttpRequest = HTTP.HttpRequest;
@@ -27,7 +28,14 @@ actor {
     let cached = RBT.get(cache, HTTP.compare_http_request, req_without_headers);
     switch cached {
       case (?r) {
-        Debug.print("Request was found in cache. Returning cached response:\n" # debug_show Text.decodeUtf8(r.body) # "\n");
+        // Print the body of the response
+        let message = Text.decodeUtf8(r.body);
+        switch message {
+          case (null) {};
+          case (?m) {
+            Debug.print(m);
+          };
+        };
         return r;
       };
       case null {
@@ -57,7 +65,7 @@ actor {
       case null {
         Debug.print("Storing request in cache.");
         let time = Time.now();
-        let message = "Request has been stored in cache: \nURL is: " # url # ".\nMethod is " # req.method # "\nBody is: \n" # debug_show req.body # "." # "\nTimestamp is: \n" # debug_show Time.now() # ".";
+        let message = "Request has been stored in cache: \n" # "URL is: " # url # "\n" # "Method is " # req.method # "\n" # "Body is: " # debug_show req.body # "\n" # "Timestamp is: \n" # debug_show Time.now();
 
         let response : HttpResponse = {
           status_code : Nat16 = 200;

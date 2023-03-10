@@ -1,21 +1,8 @@
 {
   "canisters": {
-    "cache_example_backend": {
-      "main": "src/cache_example_backend/main.mo",
+    "cache": {
+      "main": "src/cache/main.mo",
       "type": "motoko"
-    },
-    "cache_example_frontend": {
-      "dependencies": [
-        "cache_example_backend"
-      ],
-      "frontend": {
-        "entrypoint": "src/cache_example_frontend/src/index.html"
-      },
-      "source": [
-        "src/cache_example_frontend/assets",
-        "dist/cache_example_frontend/"
-      ],
-      "type": "assets"
     }
   },
   "defaults": {
