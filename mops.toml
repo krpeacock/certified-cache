@@ -1,0 +1,3 @@
+[dependencies]
+base = "0.8.3"
+StableRBTree = "https://github.com/canscale/StableRBTree#master"
