@@ -1,3 +1,5 @@
 [dependencies]
 base = "0.8.3"
 StableRBTree = "https://github.com/canscale/StableRBTree#master"
+motoko-sha = "https://github.com/enzoh/motoko-sha#master"
+motoko-merkle-tree = "https://github.com/nomeata/motoko-merkle-tree#master"
