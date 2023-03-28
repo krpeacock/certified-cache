@@ -7,7 +7,7 @@
   },
   "defaults": {
     "build": {
-      "packtool": "mops sources"
+      "packtool": "npx mops sources"
     }
   },
   "output_env_file": ".env",

@@ -2,7 +2,12 @@
   "name": "cache_example_frontend",
   "version": "0.1.0",
   "description": "Internet Computer starter application",
-  "keywords": ["Internet Computer", "Motoko", "JavaScript", "Canister"],
+  "keywords": [
+    "Internet Computer",
+    "Motoko",
+    "JavaScript",
+    "Canister"
+  ],
   "scripts": {
     "build": "webpack",
     "prebuild": "npm run generate",
@@ -19,6 +24,7 @@
     "copy-webpack-plugin": "^11.0.0",
     "events": "3.3.0",
     "html-webpack-plugin": "5.5.0",
+    "ic-mops": "^0.8.10",
     "process": "0.11.10",
     "stream-browserify": "3.0.0",
     "terser-webpack-plugin": "^5.3.3",
