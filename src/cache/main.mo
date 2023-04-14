@@ -97,51 +97,38 @@ actor Self {
       body = req.body;
     };
     let url = req.url;
-    let cached = FHM.get<Text, Blob>(cache, Text.equal, Text.hash, req.url);
-    switch cached {
-      case (?body) {
-        let response : HttpResponse = {
-          status_code : Nat16 = 200;
-          headers = [("content-type", "text/html"), certification_header(req.url)];
-          body = body;
-          streaming_strategy = null;
-          upgrade = null;
-        };
+
+    Debug.print("Storing request in cache.");
+    let time = Time.now();
+    let message = "<pre>Request has been stored in cache: \n" # "URL is: " # url # "\n" # "Method is " # req.method # "\n" # "Body is: " # debug_show req.body # "\n" # "Timestamp is: \n" # debug_show Time.now() # "\n" # "</pre>";
+
+    if (req.url == "/" or req.url == "/index.html") {
+      let page = main_page();
+      update_asset_hash(?req.url);
+      let response : HttpResponse = {
+        status_code : Nat16 = 200;
+        headers = [("content-type", "text/html"), certification_header(req.url)];
+        body = page;
+        streaming_strategy = null;
+        upgrade = null;
       };
-      case null {
-        Debug.print("Storing request in cache.");
-        let time = Time.now();
-        let message = "<pre>Request has been stored in cache: \n" # "URL is: " # url # "\n" # "Method is " # req.method # "\n" # "Body is: " # debug_show req.body # "\n" # "Timestamp is: \n" # debug_show Time.now() # "\n" # "</pre>";
+      FHM.put(cache, Text.equal, Text.hash, req.url, page);
+      return response;
+    } else {
+      let page = page_template(message);
 
-        if (req.url == "/" or req.url == "/index.html") {
-          let page = main_page();
-          update_asset_hash(?req.url);
-          let response : HttpResponse = {
-            status_code : Nat16 = 200;
-            headers = [("content-type", "text/html"), certification_header(req.url)];
-            body = page;
-            streaming_strategy = null;
-            upgrade = null;
-          };
-          FHM.put(cache, Text.equal, Text.hash, req.url, page);
-          return response;
-        } else {
-          let page = page_template(message);
+      await store(req.url, page);
 
-          await store(req.url, page);
-
-          let response : HttpResponse = {
-            status_code : Nat16 = 200;
-            headers = [("content-type", "text/html"), certification_header(req.url)];
-            body = page;
-            streaming_strategy = null;
-            upgrade = null;
-          };
-
-          FHM.put(cache, Text.equal, Text.hash, req.url, page);
-          return response;
-        };
+      let response : HttpResponse = {
+        status_code : Nat16 = 200;
+        headers = [("content-type", "text/html")];
+        body = page;
+        streaming_strategy = null;
+        upgrade = null;
       };
+
+      FHM.put(cache, Text.equal, Text.hash, req.url, page);
+      return response;
     };
   };
 
@@ -175,7 +162,7 @@ actor Self {
 
   func main_page() : Blob {
     page_template(
-      "<p>This canister demonstrates certified HTTP assets from Motoko.</p>" # "<p>You can see this text at <tt>https://" # debug_show my_id() # ".ic0.app/</tt> " # "(note, no <tt>raw</tt> in the URL!) and it will validate!</p>" # "<p>This canister is dynamic, and implements a simple key-value store. Here is the list of " # "keys:</p>" # "<ul>" #
+      "<p>This canister demonstrates certified HTTP assets from Motoko.</p>" # "<p>You can see this text at <tt>https://" # debug_show my_id() # ".ic0.app/</tt> " # "(note, no <tt>raw</tt> in the URL!) and it will validate!</p>" # "<p>This canister is dynamic, and uses http_request updates to store any visited route as a cached \"asset\". Here is the list of " # "cached routes:</p>" # "<ul>" #
       Text.join(
         "",
         Iter.map(
@@ -184,7 +171,9 @@ actor Self {
             "<li><a href='" # ofUtf8(key) # "'>" # ofUtf8(key) # "</a></li>";
           },
         ),
-      ) # "</ul>" # "<p>And to demonstrate that this really is dynamic, you can store and delete keys using " # "<a href='https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.ic0.app/?id=" # debug_show my_id() # "'>" # "the Candid UI</a>.</p>" # "<p>The source of this canister can be found at " # "<a href='https://github.com/nomeata/ic-certification/tree/main/demo'>https://github.com/nomeata/ic-certification/tree/main/demo</a>.</p>"
+      ) # "</ul>" # "<p>And to demonstrate that this really is dynamic, you can visit a new route and it will show up in this list.<pp>" # "<p>Code for this canister can be found at " # "<a href='https://github.com/krpeacock/cache-example'>https://github.com/krpeacock/cache-example</a>.</p>"
+
+      # "<p>Many thanks to Joachim for the certification library behind this package, at <a href='https://github.com/nomeata/ic-certification/tree/main/demo'>https://github.com/nomeata/ic-certification/tree/main/demo</a>.</p>",
     );
   };
 
@@ -274,6 +263,7 @@ value of the main page.
   // If your CertTree.Store is stable, it is recommended to prune all signatures in pre or post-upgrade:
   system func postupgrade() {
     csm.pruneAll();
+    update_asset_hash(null);
   };
 
 };
