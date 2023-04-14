@@ -14,15 +14,20 @@ import Prelude "mo:base/Prelude";
 import Principal "mo:base/Principal";
 import Buffer "mo:base/Buffer";
 import Nat8 "mo:base/Nat8";
+import CertifiedCache "CertifiedCache";
 
 actor Self {
   type HttpRequest = HTTP.HttpRequest;
   type HttpResponse = HTTP.HttpResponse;
 
-  stable var cache = FHM.init<Text, Blob>();
-  stable let cert_store : CertTree.Store = CertTree.newStore();
-  let ct = CertTree.Ops(cert_store);
-  let csm = CanisterSigs.Manager(ct, null);
+  var two_days_in_nanos = 2 * 24 * 60 * 60 * 1000 * 1000 * 1000;
+
+  var cache = CertifiedCache.CertifiedCache<Text, Blob>(0, Text.equal, Text.hash, Text.encodeUtf8, func (b: Blob): Blob{ b},two_days_in_nanos);
+
+
+  public query func keys () : async [Text] {
+    return Iter.toArray(cache.keys());
+  };
 
   public query func http_request(req : HttpRequest) : async HttpResponse {
     let req_without_headers = {
@@ -32,30 +37,8 @@ actor Self {
       body = req.body;
     };
 
-    if (req.url == "/" or req.url == "/index.html") {
-      let hasCertifiedData = Option.isSome(ct.lookup(["http_assets", Text.encodeUtf8("/")]));
-      if (hasCertifiedData) {
-        let page = main_page();
-        let response : HttpResponse = {
-          status_code : Nat16 = 200;
-          headers = [("content-type", "text/html"), certification_header(req.url)];
-          body = page;
-          streaming_strategy = null;
-          upgrade = null;
-        };
-        return response;
-      } else {
-        return {
-          status_code = 404;
-          headers = [];
-          body = Blob.fromArray([]);
-          streaming_strategy = null;
-          upgrade = ?true;
-        };
-      };
-    };
+    let cached = cache.get(req.url);
 
-    let cached = FHM.get<Text, Blob>(cache, Text.equal, Text.hash, req.url);
     switch cached {
       case (?body) {
         // Print the body of the response
@@ -68,7 +51,7 @@ actor Self {
         };
         let response : HttpResponse = {
           status_code : Nat16 = 200;
-          headers = [("content-type", "text/html"), certification_header(req.url)];
+          headers = [("content-type", "text/html"), cache.certification_header(req.url)];
           body = body;
           streaming_strategy = null;
           upgrade = null;
@@ -104,20 +87,18 @@ actor Self {
 
     if (req.url == "/" or req.url == "/index.html") {
       let page = main_page();
-      update_asset_hash(?req.url);
       let response : HttpResponse = {
         status_code : Nat16 = 200;
-        headers = [("content-type", "text/html"), certification_header(req.url)];
+        headers = [("content-type", "text/html")];
         body = page;
         streaming_strategy = null;
         upgrade = null;
       };
-      FHM.put(cache, Text.equal, Text.hash, req.url, page);
+      
+      let replaced = cache.replace(req.url, page);
       return response;
     } else {
       let page = page_template(message);
-
-      await store(req.url, page);
 
       let response : HttpResponse = {
         status_code : Nat16 = 200;
@@ -127,21 +108,11 @@ actor Self {
         upgrade = null;
       };
 
-      FHM.put(cache, Text.equal, Text.hash, req.url, page);
+      let replaced = cache.replace(req.url, page);
       return response;
     };
   };
 
-  public shared func store(key : Text, value : Blob) : async () {
-    // Store key directly
-    ct.put(["http_assets", Text.encodeUtf8(key)], value);
-    update_asset_hash(?key); // will be explained below
-  };
-
-  public shared func delete(key : Text) : async () {
-    ct.delete(["http_assets", Text.encodeUtf8(key)]);
-    update_asset_hash(?key); // will be explained below
-  };
 
   // We put the blobs in the tree, we know they are valid
   func ofUtf8(b : Blob) : Text {
@@ -166,9 +137,9 @@ actor Self {
       Text.join(
         "",
         Iter.map(
-          ct.labelsAt(["http_assets"]),
-          func(key : Blob) : Text {
-            "<li><a href='" # ofUtf8(key) # "'>" # ofUtf8(key) # "</a></li>";
+          cache.keys(),
+          func(key : Text) : Text {
+            "<li><a href='" # key # "'>" # key # "</a></li>";
           },
         ),
       ) # "</ul>" # "<p>And to demonstrate that this really is dynamic, you can visit a new route and it will show up in this list.<pp>" # "<p>Code for this canister can be found at " # "<a href='https://github.com/krpeacock/cache-example'>https://github.com/krpeacock/cache-example</a>.</p>"
@@ -178,77 +149,12 @@ actor Self {
   };
 
   func value_page(key : Text) : Blob {
-    switch (ct.lookup(["http_assets", Text.encodeUtf8(key)])) {
+    switch (cache.get(key)) {
       case (null) { page_template("<p>Key " # key # " not found.</p>") };
       case (?v) {
         v;
       };
     };
-  };
-
-  func update_asset_hash(ok : ?Text) {
-    // Always update main page
-    ct.put(["http_assets", "/"], h(main_page()));
-    // Update the page at that key
-    switch (ok) {
-      case null {};
-      case (?k) {
-        ct.put(["http_assets", Text.encodeUtf8(k)], h(value_page(k)));
-      };
-    };
-    // After every modification, we should update the hash.
-    ct.setCertifiedData();
-  };
-  func base64(b : Blob) : Text {
-    let base64_chars : [Text] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"];
-    let bytes = Blob.toArray(b);
-    let pad_len = if (bytes.size() % 3 == 0) { 0 } else {
-      3 - bytes.size() % 3 : Nat;
-    };
-    let buf = Buffer.fromArray<Nat8>(bytes);
-    for (_ in Iter.range(0, pad_len -1)) { buf.add(0) };
-    let padded_bytes = Buffer.toArray(buf);
-    var out = "";
-    for (j in Iter.range(1, padded_bytes.size() / 3)) {
-      let i = j - 1 : Nat; // annoying inclusive upper bound in Iter.range
-      let b1 = padded_bytes[3 * i];
-      let b2 = padded_bytes[3 * i +1];
-      let b3 = padded_bytes[3 * i +2];
-      let c1 = (b1 >> 2) & 63;
-      let c2 = (b1 << 4 | b2 >> 4) & 63;
-      let c3 = (b2 << 2 | b3 >> 6) & 63;
-      let c4 = (b3) & 63;
-      out #= base64_chars[Nat8.toNat(c1)] # base64_chars[Nat8.toNat(c2)] # (if (3 * i +1 >= bytes.size()) { "=" } else { base64_chars[Nat8.toNat(c3)] }) # (if (3 * i +2 >= bytes.size()) { "=" } else { base64_chars[Nat8.toNat(c4)] });
-    };
-    return out;
-  };
-
-  /*
-The other use of the tree is when calculating the ic-certificate header. This header
-contains the certificate obtained from the system, which we just pass through,
-and a witness calculated from hash tree that reveals the hash of the current
-value of the main page.
-*/
-
-  func certification_header(url : Text) : HTTP.HeaderField {
-    let witness = ct.reveal(["http_assets", Text.encodeUtf8(url)]);
-    let encoded = ct.encodeWitness(witness);
-    let cert = switch (CertifiedData.getCertificate()) {
-      case (?c) c;
-      case null {
-        // unfortunately, we cannot do
-        //   throw Error.reject("getCertificate failed. Call this as a query call!")
-        // here, because this function isn’t async, but we can’t make it async
-        // because it is called from a query (and it would do the wrong thing) :-(
-        //
-        // So just return erronous data instead
-        "getCertificate failed. Call this as a query call!" : Blob;
-      };
-    };
-    return (
-      "ic-certificate",
-      "certificate=:" # base64(cert) # ":, " # "tree=:" # base64(encoded) # ":",
-    );
   };
 
   /*
@@ -262,8 +168,7 @@ value of the main page.
 
   // If your CertTree.Store is stable, it is recommended to prune all signatures in pre or post-upgrade:
   system func postupgrade() {
-    csm.pruneAll();
-    update_asset_hash(null);
+    cache.pruneAll();
   };
 
 };
