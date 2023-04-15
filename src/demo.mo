@@ -14,7 +14,7 @@ import Prelude "mo:base/Prelude";
 import Principal "mo:base/Principal";
 import Buffer "mo:base/Buffer";
 import Nat8 "mo:base/Nat8";
-import CertifiedCache "CertifiedCache";
+import CertifiedCache "lib";
 
 actor Self {
   type HttpRequest = HTTP.HttpRequest;
@@ -22,10 +22,10 @@ actor Self {
 
   var two_days_in_nanos = 2 * 24 * 60 * 60 * 1000 * 1000 * 1000;
 
-  var cache = CertifiedCache.CertifiedCache<Text, Blob>(0, Text.equal, Text.hash, Text.encodeUtf8, func (b: Blob): Blob{ b},two_days_in_nanos);
+  stable var entries : [(Text, (Blob, Nat))] = [];
+  var cache = CertifiedCache.fromEntries<Text, Blob>(entries, Text.equal, Text.hash, Text.encodeUtf8, func(b : Blob) : Blob { b }, two_days_in_nanos);
 
-
-  public query func keys () : async [Text] {
+  public query func keys() : async [Text] {
     return Iter.toArray(cache.keys());
   };
 
@@ -94,7 +94,7 @@ actor Self {
         streaming_strategy = null;
         upgrade = null;
       };
-      
+
       let replaced = cache.replace(req.url, page);
       return response;
     } else {
@@ -112,7 +112,6 @@ actor Self {
       return response;
     };
   };
-
 
   // We put the blobs in the tree, we know they are valid
   func ofUtf8(b : Blob) : Text {
@@ -164,6 +163,10 @@ actor Self {
     let d = SHA256.Digest();
     d.write(Blob.toArray(b1));
     Blob.fromArray(d.sum());
+  };
+
+  system func preupgrade() {
+    entries := cache.entries();
   };
 
   // If your CertTree.Store is stable, it is recommended to prune all signatures in pre or post-upgrade:

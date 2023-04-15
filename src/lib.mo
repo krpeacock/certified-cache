@@ -11,6 +11,7 @@ import HTTP "Http";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Nat8 "mo:base/Nat8";
+import Array "mo:base/Array";
 
 module {
   public class CertifiedCache<K, V>(
@@ -80,8 +81,30 @@ module {
     public func vals() : Iter.Iter<V> {
       map.vals();
     };
-    public func entries() : Iter.Iter<(K, V)> {
-      map.entries();
+
+    /** 
+     * This will give you the key-value pairs in the cache
+     * along with the expiry time for each key.
+     */
+    public func entries() : [(K, (V, Nat))] {
+      var mapped = Buffer.fromArray<(K, (V, Nat))>([]);
+      for (k in keys()) {
+        let expiry = ExpiryMap.get(k);
+        switch expiry {
+          case null { Debug.trap("Expiry time not found for key") };
+          case (?e) {
+            let v = get(k);
+            switch v {
+              case null { Debug.trap("Value not found for key") };
+              case (?v) {
+                mapped.add((k, (v, e)));
+              };
+            };
+          };
+        };
+      };
+
+      Buffer.toArray(mapped);
     };
 
     /* Expiry Logic */
@@ -101,6 +124,10 @@ module {
         };
       };
       Buffer.toArray(removed);
+    };
+
+    public func getExpiry(key : K) : ?Nat {
+      ExpiryMap.get(key);
     };
 
     /* Certification Logic */
@@ -155,4 +182,23 @@ module {
     };
 
   };
+
+  public func fromEntries<K, V>(
+    entries : [(K, (V, Nat))],
+    keyEq : (K, K) -> Bool,
+    keyHash : K -> Hash.Hash,
+    keyToBlob : K -> Blob,
+    valToBlob : V -> Blob,
+    timeToLive : Nat,
+  ) : CertifiedCache<K, V> {
+    let initCapacity = Array.size(entries);
+    let newCache = CertifiedCache<K, V>(initCapacity, keyEq, keyHash, keyToBlob, valToBlob, timeToLive);
+    for (entry in Iter.fromArray(entries)) {
+      let (k, val_exp) = entry;
+      let (v, e) = val_exp;
+      newCache.put(k, v, ?e);
+    };
+    newCache;
+  };
+
 };
