@@ -231,3 +231,17 @@ Timestamp is:
 ```
 
 Take this idea and run with it! I think it will be really powerful for JSON responses and other types of APIs.
+
+
+## License
+
+Licensed under the Apache License, Version 2.0.
+
+## Credits
+
+This library was created by [Kyle Peacock](https://kyle-peacock.com/).
+
+It depends upon the following libraries:
+- [IC-Certification](https://github.com/nomeata/ic-certification) by [Joachim Breitner](https://www.joachim-breitner.de/blog)
+- [StableHashMap](https://github.com/canscale/StableHashMap#master) by [Byron Becker](https://github.com/ByronBecker)
+- [Motoko-Sha](https://github.com/enzoh/motoko-sha#master) by [Enzo Haussecker](https://github.com/enzoh)
