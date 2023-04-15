@@ -64,9 +64,13 @@ module {
     };
     public func delete(k : K) = ignore remove(k);
 
-    public func replace(k : K, v : V) : ?V {
+    public func replace(k : K, v : V, e: ?Nat) : ?V {
       // replace expiry time in ExpiryMap
-      let _ = ExpiryMap.replace(k, timeToLive);
+      let newExpiry = switch e {
+        case null { timeToLive };
+        case (?e) { e };
+      };
+      let _ = ExpiryMap.replace(k, newExpiry);
 
       // replace in CertTree
       ct.put(["http_assets", keyToBlob(k)], valToBlob(v));
@@ -108,7 +112,7 @@ module {
     };
 
     /* Expiry Logic */
-    public func pruneExpired() : [K] {
+    public func pruneAll() : [K] {
       let now = Time.now();
       let removed = Buffer.fromArray<K>([]);
       for (k in keys()) {
@@ -123,6 +127,7 @@ module {
           };
         };
       };
+      csm.pruneAll();
       Buffer.toArray(removed);
     };
 
@@ -132,7 +137,7 @@ module {
 
     /* Certification Logic */
 
-    func base64(b : Blob) : Text {
+    private func base64(b : Blob) : Text {
       let base64_chars : [Text] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"];
       let bytes = Blob.toArray(b);
       let pad_len = if (bytes.size() % 3 == 0) { 0 } else {
@@ -155,7 +160,7 @@ module {
       };
       return out;
     };
-    public func certification_header(url : K) : HTTP.HeaderField {
+    public func certificationHeader(url : K) : HTTP.HeaderField {
       let witness = ct.reveal(["http_assets", keyToBlob(url)]);
       let encoded = ct.encodeWitness(witness);
       let cert = switch (CertifiedData.getCertificate()) {
@@ -174,11 +179,6 @@ module {
         "ic-certificate",
         "certificate=:" # base64(cert) # ":, " # "tree=:" # base64(encoded) # ":",
       );
-    };
-
-    public func pruneAll() : () {
-      let _ = pruneExpired();
-      csm.pruneAll();
     };
 
   };

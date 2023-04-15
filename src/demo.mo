@@ -23,7 +23,14 @@ actor Self {
   var two_days_in_nanos = 2 * 24 * 60 * 60 * 1000 * 1000 * 1000;
 
   stable var entries : [(Text, (Blob, Nat))] = [];
-  var cache = CertifiedCache.fromEntries<Text, Blob>(entries, Text.equal, Text.hash, Text.encodeUtf8, func(b : Blob) : Blob { b }, two_days_in_nanos);
+  var cache = CertifiedCache.fromEntries<Text, Blob>(
+    entries,
+    Text.equal,
+    Text.hash,
+    Text.encodeUtf8,
+    func(b : Blob) : Blob { b },
+    two_days_in_nanos,
+  );
 
   public query func keys() : async [Text] {
     return Iter.toArray(cache.keys());
@@ -108,7 +115,7 @@ actor Self {
         upgrade = null;
       };
 
-      let replaced = cache.replace(req.url, page);
+      let put = cache.put(req.url, page, null);
       return response;
     };
   };

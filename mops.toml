@@ -1,8 +1,8 @@
 [package]
-name = "CertifiedCache"
+name = "certified-cache"
 version = "0.1.0"
 description = "A single interface that stores key-value pairs and certifies their hashes for use as certified variables or assets."
-repository = "https://github.com/krpeacock/certifiedcache"
+repository = "https://github.com/krpeacock/certified-cache#main"
 
 [dependencies]
 base = "0.8.3"
