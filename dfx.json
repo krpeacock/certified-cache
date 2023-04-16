@@ -1,7 +1,7 @@
 {
   "canisters": {
     "cache": {
-      "main": "src/cache/demo.mo",
+      "main": "src/demo.mo",
       "type": "motoko"
     }
   },

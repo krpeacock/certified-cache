@@ -19,6 +19,7 @@ import CertifiedCache "mo:certified-cache";
 ## Usage
 
 The cache will handle three responsibilities:
+
 - Storing the key-value pair in the cache
 - Certifying the values for `http_assets`
 - Managing expirations for cached assets
@@ -49,7 +50,7 @@ actor {
     Text.hash,
     Text.encodeUtf8,
     func(b : Blob) : Blob { b },
-    two_days_in_nanos,
+    two_days_in_nanos + Int.abs(Time.now()),
   );
 
   // application logic
@@ -91,9 +92,9 @@ Here is an example of how this works:
 
 ```rust
 import Http "mo:certified-cache/Http";
-... 
+...
  var cache = CertifiedCache.fromEntries<Text, Blob>(...);
- 
+
  public query func http_request(req : Http.HttpRequest) : async Http.HttpResponse {
     let cached = cache.get(req.url);
     switch cached {
@@ -232,7 +233,6 @@ Timestamp is:
 
 Take this idea and run with it! I think it will be really powerful for JSON responses and other types of APIs.
 
-
 ## License
 
 Licensed under the Apache License, Version 2.0.
@@ -242,6 +242,7 @@ Licensed under the Apache License, Version 2.0.
 This library was created by [Kyle Peacock](https://kyle-peacock.com/).
 
 It depends upon the following libraries:
+
 - [IC-Certification](https://github.com/nomeata/ic-certification) by [Joachim Breitner](https://www.joachim-breitner.de/blog)
 - [StableHashMap](https://github.com/canscale/StableHashMap#master) by [Byron Becker](https://github.com/ByronBecker)
 - [Motoko-Sha](https://github.com/enzoh/motoko-sha#master) by [Enzo Haussecker](https://github.com/enzoh)

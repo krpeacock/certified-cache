@@ -15,6 +15,7 @@ import Principal "mo:base/Principal";
 import Buffer "mo:base/Buffer";
 import Nat8 "mo:base/Nat8";
 import CertifiedCache "lib";
+import Int "mo:base/Int";
 
 actor Self {
   type HttpRequest = HTTP.HttpRequest;
@@ -29,7 +30,7 @@ actor Self {
     Text.hash,
     Text.encodeUtf8,
     func(b : Blob) : Blob { b },
-    two_days_in_nanos,
+    two_days_in_nanos + Int.abs(Time.now()),
   );
 
   public query func keys() : async [Text] {
@@ -58,7 +59,7 @@ actor Self {
         };
         let response : HttpResponse = {
           status_code : Nat16 = 200;
-          headers = [("content-type", "text/html"), cache.certification_header(req.url)];
+          headers = [("content-type", "text/html"), cache.certificationHeader(req.url)];
           body = body;
           streaming_strategy = null;
           upgrade = null;
@@ -102,7 +103,7 @@ actor Self {
         upgrade = null;
       };
 
-      let replaced = cache.replace(req.url, page);
+      let put = cache.put(req.url, page, null);
       return response;
     } else {
       let page = page_template(message);
@@ -116,6 +117,11 @@ actor Self {
       };
 
       let put = cache.put(req.url, page, null);
+
+      // update index
+      let indexBody = main_page();
+      cache.put("/", indexBody, null);
+
       return response;
     };
   };
@@ -178,7 +184,7 @@ actor Self {
 
   // If your CertTree.Store is stable, it is recommended to prune all signatures in pre or post-upgrade:
   system func postupgrade() {
-    cache.pruneAll();
+    let _ = cache.pruneAll();
   };
 
 };
