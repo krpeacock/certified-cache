@@ -2,6 +2,7 @@ import HashMap "mo:StableHashMap/ClassStableHashMap";
 import CertTree "mo:ic-certification/CertTree";
 import CanisterSigs "mo:ic-certification/CanisterSigs";
 import CertifiedData "mo:base/CertifiedData";
+import SHA256 "mo:motoko-sha/SHA256";
 import Hash "mo:base/Hash";
 import Iter "mo:base/Iter";
 import Time "mo:base/Time";
@@ -46,7 +47,7 @@ module {
         };
       };
       // insert into CertTree
-      ct.put(["http_assets", keyToBlob(key)], valToBlob(value));
+      ct.put(["http_assets", keyToBlob(key)], Blob.fromArray(SHA256.sha256(Blob.toArray(valToBlob(value)))));
       ct.setCertifiedData();
 
       map.put(key, value);
@@ -64,7 +65,7 @@ module {
     };
     public func delete(k : K) = ignore remove(k);
 
-    public func replace(k : K, v : V, e: ?Nat) : ?V {
+    public func replace(k : K, v : V, e : ?Nat) : ?V {
       // replace expiry time in ExpiryMap
       let newExpiry = switch e {
         case null { timeToLive };

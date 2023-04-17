@@ -38,13 +38,6 @@ actor Self {
   };
 
   public query func http_request(req : HttpRequest) : async HttpResponse {
-    let req_without_headers = {
-      method = req.method;
-      url = req.url;
-      headers = [];
-      body = req.body;
-    };
-
     let cached = cache.get(req.url);
 
     switch cached {
@@ -81,12 +74,6 @@ actor Self {
   };
 
   public func http_request_update(req : HttpRequest) : async HttpResponse {
-    let req_without_headers = {
-      method = req.method;
-      url = req.url;
-      headers = [];
-      body = req.body;
-    };
     let url = req.url;
 
     Debug.print("Storing request in cache.");
@@ -123,14 +110,6 @@ actor Self {
       cache.put("/", indexBody, null);
 
       return response;
-    };
-  };
-
-  // We put the blobs in the tree, we know they are valid
-  func ofUtf8(b : Blob) : Text {
-    switch (Text.decodeUtf8(b)) {
-      case (?t) t;
-      case null { Debug.trap("Internal error: invalid utf8") };
     };
   };
 
@@ -172,11 +151,6 @@ actor Self {
   /*
   * Convenience function to implement SHA256 on Blobs rather than [Int8]
   */
-  func h(b1 : Blob) : Blob {
-    let d = SHA256.Digest();
-    d.write(Blob.toArray(b1));
-    Blob.fromArray(d.sum());
-  };
 
   system func preupgrade() {
     entries := cache.entries();
