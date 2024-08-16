@@ -2,17 +2,17 @@ import HashMap "mo:StableHashMap/ClassStableHashMap";
 import CertTree "mo:ic-certification/CertTree";
 import CanisterSigs "mo:ic-certification/CanisterSigs";
 import CertifiedData "mo:base/CertifiedData";
-import SHA256 "mo:motoko-sha/SHA256";
+import Sha256 "mo:sha2/Sha256";
 import Hash "mo:base/Hash";
 import Iter "mo:base/Iter";
 import Time "mo:base/Time";
-import Option "mo:base/Option";
 import Debug "mo:base/Debug";
 import HTTP "Http";
 import Blob "mo:base/Blob";
 import Buffer "mo:base/Buffer";
 import Nat8 "mo:base/Nat8";
 import Array "mo:base/Array";
+import Int "mo:base/Int";
 
 module {
   public class CertifiedCache<K, V>(
@@ -40,14 +40,15 @@ module {
         case null { ExpiryMap.put(key, timeToLive) };
         case (?e) {
           if (e < Time.now()) {
-            Debug.trap("Expiry time is in the past");
+            // warn that the expiry is in the past
+            // Debug.print("Warning: expiry time is in the past");
           } else {
             ExpiryMap.put(key, e);
           };
         };
       };
       // insert into CertTree
-      ct.put(["http_assets", keyToBlob(key)], Blob.fromArray(SHA256.sha256(Blob.toArray(valToBlob(value)))));
+      ct.put(["http_assets", keyToBlob(key)], Sha256.fromBlob(#sha256, valToBlob(value)));
       ct.setCertifiedData();
 
       map.put(key, value);
@@ -96,7 +97,16 @@ module {
       for (k in keys()) {
         let expiry = ExpiryMap.get(k);
         switch expiry {
-          case null { Debug.trap("Expiry time not found for key") };
+          case null { 
+            let v = get(k);
+            switch v {
+              case null { Debug.trap("Value not found for key") };
+              case (?v) {
+                let defaultExpiry = Time.now() + timeToLive;
+                mapped.add((k, (v, Int.abs(defaultExpiry))));
+              };
+            };
+           };
           case (?e) {
             let v = get(k);
             switch v {
@@ -119,7 +129,9 @@ module {
       for (k in keys()) {
         let expiry = ExpiryMap.get(k);
         switch expiry {
-          case null { Debug.trap("Expiry time not found for key") };
+          case null { 
+            ignore remove(k);
+           };
           case (?e) {
             if (e < now) {
               let _ = remove(k);

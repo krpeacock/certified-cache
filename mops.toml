@@ -1,11 +1,21 @@
 [package]
 name = "certified-cache"
-version = "0.2.1"
+version = "0.3.0"
 description = "A single interface that stores key-value pairs and certifies their hashes for use as certified variables or assets."
 repository = "https://github.com/krpeacock/certified-cache"
+license = "MIT"
+keywords = [
+  "cache",
+  "certification",
+  "hash",
+  "ic",
+  "certified",
+  "certify",
+  "stable"
+]
 
 [dependencies]
-base = "0.10.0"
+base = "0.12.1"
 ic-certification = "0.1.3"
-motoko-sha = "https://github.com/enzoh/motoko-sha#master"
-StableHashMap = "https://github.com/canscale/StableHashMap#master"
+StableHashMap = "https://github.com/canscale/StableHashMap#master@06d5ae9d8561ec0c3768dbfcced6ee90be923b70"
+sha2 = "0.1.0"

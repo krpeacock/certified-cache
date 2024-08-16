@@ -1,19 +1,10 @@
-import FHM "mo:StableHashMap/FunctionalStableHashMap";
-import SHA256 "mo:motoko-sha/SHA256";
-import CertTree "mo:ic-certification/CertTree";
-import CanisterSigs "mo:ic-certification/CanisterSigs";
-import CertifiedData "mo:base/CertifiedData";
 import HTTP "./Http";
 import Iter "mo:base/Iter";
 import Blob "mo:base/Blob";
-import Option "mo:base/Option";
 import Time "mo:base/Time";
 import Text "mo:base/Text";
 import Debug "mo:base/Debug";
-import Prelude "mo:base/Prelude";
 import Principal "mo:base/Principal";
-import Buffer "mo:base/Buffer";
-import Nat8 "mo:base/Nat8";
 import CertifiedCache "lib";
 import Int "mo:base/Int";
 
@@ -77,7 +68,6 @@ actor Self {
     let url = req.url;
 
     Debug.print("Storing request in cache.");
-    let time = Time.now();
     let message = "<pre>Request has been stored in cache: \n" # "URL is: " # url # "\n" # "Method is " # req.method # "\n" # "Body is: " # debug_show req.body # "\n" # "Timestamp is: \n" # debug_show Time.now() # "\n" # "</pre>";
 
     if (req.url == "/" or req.url == "/index.html") {
@@ -90,7 +80,7 @@ actor Self {
         upgrade = null;
       };
 
-      let put = cache.put(req.url, page, null);
+      cache.put(req.url, page, null);
       return response;
     } else {
       let page = page_template(message);
@@ -103,7 +93,7 @@ actor Self {
         upgrade = null;
       };
 
-      let put = cache.put(req.url, page, null);
+      cache.put(req.url, page, null);
 
       // update index
       let indexBody = main_page();
@@ -137,15 +127,6 @@ actor Self {
 
       # "<p>Many thanks to Joachim for the certification library behind this package, at <a href='https://github.com/nomeata/ic-certification/tree/main/demo'>https://github.com/nomeata/ic-certification/tree/main/demo</a>.</p>",
     );
-  };
-
-  func value_page(key : Text) : Blob {
-    switch (cache.get(key)) {
-      case (null) { page_template("<p>Key " # key # " not found.</p>") };
-      case (?v) {
-        v;
-      };
-    };
   };
 
   /*
