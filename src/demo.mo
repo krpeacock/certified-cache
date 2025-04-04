@@ -1,24 +1,25 @@
 import HTTP "./Http";
-import Iter "mo:base/Iter";
-import Blob "mo:base/Blob";
-import Time "mo:base/Time";
-import Text "mo:base/Text";
-import Debug "mo:base/Debug";
-import Principal "mo:base/Principal";
+import Iter "mo:new-base/Iter";
+import Blob "mo:new-base/Blob";
+import Time "mo:new-base/Time";
+import Text "mo:new-base/Text";
+import Debug "mo:new-base/Debug";
+import Principal "mo:new-base/Principal";
 import CertifiedCache "lib";
-import Int "mo:base/Int";
+import Int "mo:new-base/Int";
 
 actor Self {
   type HttpRequest = HTTP.HttpRequest;
   type HttpResponse = HTTP.HttpResponse;
+
+  Debug.print("Starting cache example canister.");
 
   var two_days_in_nanos = 2 * 24 * 60 * 60 * 1000 * 1000 * 1000;
 
   stable var entries : [(Text, (Blob, Nat))] = [];
   var cache = CertifiedCache.fromEntries<Text, Blob>(
     entries,
-    Text.equal,
-    Text.hash,
+    Text.compare,
     Text.encodeUtf8,
     func(b : Blob) : Blob { b },
     two_days_in_nanos + Int.abs(Time.now()),
