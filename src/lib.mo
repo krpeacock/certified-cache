@@ -12,11 +12,9 @@ import Nat8 "mo:new-base/Nat8";
 import Array "mo:new-base/Array";
 import Int "mo:new-base/Int";
 import Order "mo:base/Order";
-import Bool "mo:base/Bool";
 
 module {
   public class CertifiedCache<K, V>(
-    initCapacity : Nat,
     keyEq : (K, K) -> Order.Order,
     keyToBlob : K -> Blob,
     valToBlob : V -> Blob,
@@ -232,8 +230,7 @@ module {
     valToBlob : V -> Blob,
     timeToLive : Nat,
   ) : CertifiedCache<K, V> {
-    let initCapacity = Array.size(entries);
-    let newCache = CertifiedCache<K, V>(initCapacity, keyEq, keyToBlob, valToBlob, timeToLive);
+    let newCache = CertifiedCache<K, V>(keyEq, keyToBlob, valToBlob, timeToLive);
     for (entry in Iter.fromArray(entries)) {
       let (k, val_exp) = entry;
       let (v, e) = val_exp;
