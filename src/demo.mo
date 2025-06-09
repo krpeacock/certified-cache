@@ -1,4 +1,4 @@
-import HTTP "./Http";
+import HttpTypes "mo:http-types";
 import Iter "mo:new-base/Iter";
 import Blob "mo:new-base/Blob";
 import Time "mo:new-base/Time";
@@ -9,8 +9,8 @@ import CertifiedCache "lib";
 import Int "mo:new-base/Int";
 
 actor Self {
-  type HttpRequest = HTTP.HttpRequest;
-  type HttpResponse = HTTP.HttpResponse;
+  type HttpRequest = HttpTypes.Request;
+  type HttpResponse = HttpTypes.Response;
 
   Debug.print("Starting cache example canister.");
 
@@ -20,7 +20,8 @@ actor Self {
   var cache = CertifiedCache.fromEntries<Text, Blob>(
     entries,
     Text.compare,
-    Text.encodeUtf8,
+    func(t : Text) : Text { t },  // Text to Text is identity function
+    func(t : Text) : ?Text { ?t },  // Convert Text back to Text key
     func(b : Blob) : Blob { b },
     two_days_in_nanos + Int.abs(Time.now()),
   );

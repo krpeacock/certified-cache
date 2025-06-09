@@ -27,15 +27,14 @@ The cache will handle three responsibilities:
 To make this possible, during initialization, you will need to provide the following parameters:
 
 ```rust
-initCapacity : Nat,
-keyEq : (K, K) -> Bool,
-keyHash : K -> Hash.Hash,
-keyToBlob : K -> Blob,
+keyCompare : (K, K) -> Order.Order,
+keyToText : K -> Text,
+textToKey : Text -> ?K,
 valToBlob : V -> Blob,
 timeToLive : Nat,
 ```
 
-> Note - if you use the `fromEntries` constructor, you can provide the entries, rather than the `initCapacity`.
+> Note - if you use the `fromEntries` constructor, you can provide the entries, rather than initializing an empty cache.
 
 Since this is a `class` and not a stable memory structure, it is also recommended you serialize the cache to an array during upgrades. Here is an example of how this works, using a `Text` key and a `Blob` value:
 
@@ -45,23 +44,23 @@ import CertifiedCache "mo:certified-cache";
 actor {
     stable var entries : [(Text, (Blob, Nat))] = [];
     var cache = CertifiedCache.fromEntries<Text, Blob>(
-    entries,
-    Text.equal,
-    Text.hash,
-    Text.encodeUtf8,
-    func(b : Blob) : Blob { b },
-    two_days_in_nanos + Int.abs(Time.now()),
-  );
+      entries,
+      Text.compare,
+      func(t : Text) : Text { t },  // Text to Text is identity function
+      func(t : Text) : ?Text { ?t },  // Convert Text back to Text key
+      func(b : Blob) : Blob { b },
+      two_days_in_nanos + Int.abs(Time.now()),
+    );
 
-  // application logic
+    // application logic
 
-  system func preupgrade() {
-    entries := cache.entries();
-  };
+    system func preupgrade() {
+      entries := cache.entries();
+    };
 
-  system func postupgrade() {
-    cache.pruneAll();
-  };
+    system func postupgrade() {
+      cache.pruneAll();
+    };
 }
 ```
 
@@ -84,55 +83,59 @@ public func put(key : Text, value : Blob) : async () {
 
 ## Http_Request
 
-A primary purpose of this library is to make it easier to work with certified http requests. A common use case is to cache the results of an API call or server-side rendered page.
+A primary purpose of this library is to make it easier to work with certified HTTP requests. A common use case is to cache the results of an API call or server-side rendered page. This library manages both the caching and the certification of the cached values.
 
-In your code, you can use the cache to to return cached values, or to upgrade the request to an update, cache the result, and return the result.
+In your code, you can use the cache to return cached values, or to upgrade the request to an update, cache the result, and return the result.
 
 Here is an example of how this works:
 
 ```rust
 import Http "mo:certified-cache/Http";
 ...
- var cache = CertifiedCache.fromEntries<Text, Blob>(...);
+var cache = CertifiedCache.fromEntries<Text, Blob>(...);
 
- public query func http_request(req : Http.HttpRequest) : async Http.HttpResponse {
-    let cached = cache.get(req.url);
-    switch cached {
-      case (?body) {
-        {
-          status_code : Nat16 = 200;
-          headers = [("content-type", "text/html"), cache.certificationHeader(req.url)];
-          body = body;
-          streaming_strategy = null;
-          upgrade = null;
-        }
-      }
-      case null {
-        return {
-          status_code = 404;
-          headers = [];
-          body = Blob.fromArray([]);
-          streaming_strategy = null;
-          upgrade = ?true;
-        };
-      }
-    }
- }
-
- public func http_request_update(req : Http.HttpRequest) : async Http.HttpResponse {
-    // Application logic to process the request
-    let body = process_request(req);
-
-    // expiry can be null to use the default expiry
-    cache.put(req.url, body, null);
-    return {
+public query func http_request(req : Http.HttpRequest) : async Http.HttpResponse {
+  // We now have a more powerful way to get certified responses
+  let result = cache.get_certified_response(req);
+  
+  // If you still want to use the old way:
+  let cached = cache.get(req.url);
+  switch cached {
+    case (?body) {
+      {
         status_code : Nat16 = 200;
-        headers = [("content-type", "text/html")];
-        body = page;
+        headers = [("content-type", "text/html"), cache.certificationHeader(req.url)];
+        body = body;
         streaming_strategy = null;
         upgrade = null;
-    };
- }
+      }
+    }
+    case null {
+      return {
+        status_code = 404;
+        headers = [];
+        body = Blob.fromArray([]);
+        streaming_strategy = null;
+        upgrade = ?true;
+      };
+    }
+  }
+}
+
+public func http_request_update(req : Http.HttpRequest) : async Http.HttpResponse {
+  // Application logic to process the request
+  let body = process_request(req);
+
+  // expiry can be null to use the default expiry
+  cache.put(req.url, body, null);
+  return {
+    status_code : Nat16 = 200;
+    headers = [("content-type", "text/html")];
+    body = body;
+    streaming_strategy = null;
+    upgrade = null;
+  };
+}
 ```
 
 ## Interface
@@ -144,9 +147,9 @@ import Http "mo:certified-cache/Http";
 ```rust
 public func fromEntries<K, V>(
   entries : [(K, (V, Nat))],
-  keyEq : (K, K) -> Bool,
-  keyHash : K -> Hash.Hash,
-  keyToBlob : K -> Blob,
+  keyCompare : (K, K) -> Order.Order,
+  keyToText : K -> Text,
+  textToKey : Text -> ?K,
   valToBlob : V -> Blob,
   timeToLive : Nat,
 ) : CertifiedCache<K, V>
@@ -161,8 +164,9 @@ public class CertifiedCache<K, V> {
   public func entries() : [(K, (V, Nat))];
   public func get(key : K) : ?V;
   public func put(key : K, value : V, ?expiration : ?Nat) : ();
-  public func pruneAll() : ();
+  public func pruneAll() : [K];
   public func certificationHeader(key : K) : (Text, Text);
+  public func get_certified_response(req : HttpTypes.Request) : HttpTypes.Response;
 }
 ```
 
@@ -180,17 +184,19 @@ This is the class that represents the cache. It has the following methods:
 
 - `replace(key : K, value : V, ?expiration : ?Nat) : ?V` - replaces the given key with the given value. Returns the old value if it was present.
 
-- `keys() : [K]` - returns an array of all the keys in the cache
+- `keys() : Iter.Iter<K>` - returns an iterator of all the keys in the cache
 
-- `vals() : [V]` - returns an array of all the values in the cache
+- `vals() : Iter.Iter<V>` - returns an iterator of all the values in the cache
 
 - `entries() : [(K, (V, Nat))]` - returns an array of all the entries in the cache
 
-- `pruneAll() : ()` - removes all expired entries from the cache
+- `pruneAll() : [K]` - removes all expired entries from the cache and returns the list of removed keys
 
 - `getExpiry(key: K) : ?Nat` - returns the expiration time for the given key, if it exists
 
 - `certificationHeader(key : K) : (Text, Text)` - returns the certification header for the given key
+
+- `get_certified_response(req : HttpTypes.Request) : HttpTypes.Response` - returns a certified HTTP response for the given request
 
 ## Running the Demo
 
@@ -244,5 +250,4 @@ This library was created by [Kyle Peacock](https://kyle-peacock.com/).
 It depends upon the following libraries:
 
 - [IC-Certification](https://github.com/nomeata/ic-certification) by [Joachim Breitner](https://www.joachim-breitner.de/blog)
-- [StableHashMap](https://github.com/canscale/StableHashMap#master) by [Byron Becker](https://github.com/ByronBecker)
 - [sha2](https://github.com/research-ag/sha2)
